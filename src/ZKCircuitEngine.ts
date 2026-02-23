@@ -75,7 +75,9 @@ export class ZKCircuitEngine {
     const currentDate = Date.now();
     const salt = privateData.salt || this.generateSalt();
 
-    const licenseHash = this.hash([licenseType, expirationDate, salt]);
+    // Convert string to numeric hash for circuit
+    const licenseTypeHash = this.stringToNumber(licenseType);
+    const licenseHash = this.hash([licenseTypeHash, expirationDate, salt]);
 
     return {
       licenseHash: licenseHash.toString(),
@@ -121,7 +123,9 @@ export class ZKCircuitEngine {
     const userRole = privateData.role;
     const salt = privateData.salt || this.generateSalt();
 
-    const roleHash = this.hash([userRole, salt]);
+    // Convert string to numeric hash for circuit
+    const userRoleHash = this.stringToNumber(userRole);
+    const roleHash = this.hash([userRoleHash, salt]);
 
     return {
       roleHash: roleHash.toString(),
@@ -141,6 +145,19 @@ export class ZKCircuitEngine {
     }
     const hash = this.poseidon(data);
     return this.poseidon.F.toObject(hash);
+  }
+
+  /**
+   * Convert string to number for hashing
+   */
+  private stringToNumber(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
   }
 
   /**
