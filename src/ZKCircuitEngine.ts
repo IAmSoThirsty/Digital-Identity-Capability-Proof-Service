@@ -1,29 +1,48 @@
 import { ClaimType, ClaimStatement } from './types';
 import { buildPoseidon } from 'circomlibjs';
+import { CryptoUtils } from './security/CryptoUtils';
+import { InputValidator } from './security/InputValidator';
+import { ProofGenerationError, ConfigurationError } from './errors/SystemErrors';
 
 /**
- * ZK Circuit Engine
- * Manages zero-knowledge proof circuits for different claim types
+ * Production-grade ZK Circuit Engine
+ * Manages zero-knowledge proof circuits with cryptographic security
  */
 export class ZKCircuitEngine {
   private poseidon: any;
   private initialized: boolean = false;
+  private readonly BN128_FIELD_PRIME = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 
   async initialize(): Promise<void> {
     if (!this.initialized) {
-      this.poseidon = await buildPoseidon();
-      this.initialized = true;
+      try {
+        this.poseidon = await buildPoseidon();
+        this.initialized = true;
+      } catch (error) {
+        throw new ConfigurationError(
+          'Failed to initialize Poseidon hash function',
+          { error: error instanceof Error ? error.message : String(error) }
+        );
+      }
     }
   }
 
   /**
-   * Generate circuit inputs for a claim
+   * Generate circuit inputs for a claim with comprehensive validation
    */
   async generateCircuitInputs(
     claim: ClaimStatement,
     privateData: Record<string, any>
   ): Promise<Record<string, any>> {
     await this.initialize();
+
+    // Validate claim statement
+    InputValidator.validateClaimStatement(claim);
+
+    // Validate private data
+    if (!privateData || typeof privateData !== 'object') {
+      throw new ProofGenerationError('Invalid private data');
+    }
 
     switch (claim.type) {
       case ClaimType.AGE_OVER:
@@ -35,23 +54,37 @@ export class ZKCircuitEngine {
       case ClaimType.ROLE_AUTHORIZATION:
         return this.generateRoleAuthorizationInputs(claim.parameters, privateData);
       default:
-        throw new Error(`Unsupported claim type: ${claim.type}`);
+        throw new ProofGenerationError(`Unsupported claim type: ${claim.type}`);
     }
   }
 
   /**
-   * Generate inputs for age verification (over threshold)
+   * Generate inputs for age verification (over threshold) with validation
    */
   private generateAgeOverInputs(
     parameters: Record<string, any>,
     privateData: Record<string, any>
   ): Record<string, any> {
+    // Validate threshold
     const threshold = parameters.threshold || 18;
+    if (typeof threshold !== 'number' || threshold < 0 || threshold > 150) {
+      throw new ProofGenerationError('Invalid age threshold');
+    }
+
+    // Validate actual age
     const actualAge = privateData.age;
-    const salt = privateData.salt || this.generateSalt();
+    if (typeof actualAge !== 'number' || actualAge < 0 || actualAge > 150) {
+      throw new ProofGenerationError('Invalid age value');
+    }
+
+    // Generate cryptographically secure salt
+    const salt = privateData.salt !== undefined
+      ? this.validateAndConvertSalt(privateData.salt)
+      : this.generateSecureSalt();
 
     // Hash the age with salt for privacy
     const ageHash = this.hash([actualAge, salt]);
+    this.validateFieldElement(ageHash);
 
     return {
       ageHash: ageHash.toString(),
@@ -63,21 +96,41 @@ export class ZKCircuitEngine {
   }
 
   /**
-   * Generate inputs for license verification
+   * Generate inputs for license verification with validation
    */
   private generateLicenseValidInputs(
     parameters: Record<string, any>,
     privateData: Record<string, any>
   ): Record<string, any> {
+    // Validate required license type
     const requiredLicenseType = parameters.licenseType;
+    if (!requiredLicenseType || typeof requiredLicenseType !== 'string') {
+      throw new ProofGenerationError('Invalid required license type');
+    }
+
+    // Validate license type
     const licenseType = privateData.licenseType;
+    if (!licenseType || typeof licenseType !== 'string') {
+      throw new ProofGenerationError('Invalid license type');
+    }
+
+    // Validate expiration date
     const expirationDate = privateData.expirationDate;
+    if (typeof expirationDate !== 'number' || expirationDate <= 0) {
+      throw new ProofGenerationError('Invalid expiration date');
+    }
+
     const currentDate = Date.now();
-    const salt = privateData.salt || this.generateSalt();
+
+    // Generate cryptographically secure salt
+    const salt = privateData.salt !== undefined
+      ? this.validateAndConvertSalt(privateData.salt)
+      : this.generateSecureSalt();
 
     // Convert string to numeric hash for circuit
     const licenseTypeHash = this.stringToNumber(licenseType);
     const licenseHash = this.hash([licenseTypeHash, expirationDate, salt]);
+    this.validateFieldElement(licenseHash);
 
     return {
       licenseHash: licenseHash.toString(),
@@ -91,17 +144,31 @@ export class ZKCircuitEngine {
   }
 
   /**
-   * Generate inputs for clearance level verification
+   * Generate inputs for clearance level verification with validation
    */
   private generateClearanceLevelInputs(
     parameters: Record<string, any>,
     privateData: Record<string, any>
   ): Record<string, any> {
+    // Validate required level
     const requiredLevel = parameters.requiredLevel || 0;
+    if (typeof requiredLevel !== 'number' || requiredLevel < 0 || requiredLevel > 10) {
+      throw new ProofGenerationError('Invalid required clearance level');
+    }
+
+    // Validate actual level
     const actualLevel = privateData.clearanceLevel;
-    const salt = privateData.salt || this.generateSalt();
+    if (typeof actualLevel !== 'number' || actualLevel < 0 || actualLevel > 10) {
+      throw new ProofGenerationError('Invalid clearance level');
+    }
+
+    // Generate cryptographically secure salt
+    const salt = privateData.salt !== undefined
+      ? this.validateAndConvertSalt(privateData.salt)
+      : this.generateSecureSalt();
 
     const clearanceHash = this.hash([actualLevel, salt]);
+    this.validateFieldElement(clearanceHash);
 
     return {
       clearanceHash: clearanceHash.toString(),
@@ -113,19 +180,33 @@ export class ZKCircuitEngine {
   }
 
   /**
-   * Generate inputs for role authorization
+   * Generate inputs for role authorization with validation
    */
   private generateRoleAuthorizationInputs(
     parameters: Record<string, any>,
     privateData: Record<string, any>
   ): Record<string, any> {
+    // Validate required role
     const requiredRole = parameters.role;
+    if (!requiredRole || typeof requiredRole !== 'string') {
+      throw new ProofGenerationError('Invalid required role');
+    }
+
+    // Validate user role
     const userRole = privateData.role;
-    const salt = privateData.salt || this.generateSalt();
+    if (!userRole || typeof userRole !== 'string') {
+      throw new ProofGenerationError('Invalid user role');
+    }
+
+    // Generate cryptographically secure salt
+    const salt = privateData.salt !== undefined
+      ? this.validateAndConvertSalt(privateData.salt)
+      : this.generateSecureSalt();
 
     // Convert string to numeric hash for circuit
     const userRoleHash = this.stringToNumber(userRole);
     const roleHash = this.hash([userRoleHash, salt]);
+    this.validateFieldElement(roleHash);
 
     return {
       roleHash: roleHash.toString(),
@@ -137,34 +218,90 @@ export class ZKCircuitEngine {
   }
 
   /**
-   * Hash data using Poseidon hash function
+   * Hash data using Poseidon hash function with error handling
    */
   private hash(data: any[]): bigint {
     if (!this.poseidon) {
-      throw new Error('Circuit engine not initialized');
+      throw new ConfigurationError('Circuit engine not initialized');
     }
-    const hash = this.poseidon(data);
-    return this.poseidon.F.toObject(hash);
+
+    // Validate input data
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new ProofGenerationError('Invalid hash input data');
+    }
+
+    try {
+      const hash = this.poseidon(data);
+      return this.poseidon.F.toObject(hash);
+    } catch (error) {
+      throw new ProofGenerationError(
+        'Hash computation failed',
+        { error: error instanceof Error ? error.message : String(error) }
+      );
+    }
   }
 
   /**
-   * Convert string to number for hashing
+   * Validate that a value is within the BN128 field
+   */
+  private validateFieldElement(value: bigint): void {
+    if (value < 0n || value >= this.BN128_FIELD_PRIME) {
+      throw new ProofGenerationError(
+        'Value exceeds field modulus',
+        { value: value.toString() }
+      );
+    }
+  }
+
+  /**
+   * Convert string to number for hashing (deterministic)
    */
   private stringToNumber(str: string): number {
-    let hash = 0;
+    // Validate input
+    if (typeof str !== 'string' || str.length === 0) {
+      throw new ProofGenerationError('Invalid string for hashing');
+    }
+
+    // Use deterministic string hashing (DJB2 algorithm)
+    let hash = 5381;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
+      hash = ((hash << 5) + hash) + char; // hash * 33 + char
+      hash = hash >>> 0; // Convert to 32-bit unsigned integer
     }
-    return Math.abs(hash);
+    return hash;
   }
 
   /**
-   * Generate a random salt
+   * Generate cryptographically secure random salt
    */
-  private generateSalt(): number {
-    return Math.floor(Math.random() * 1000000);
+  private generateSecureSalt(): number {
+    // Generate 4 bytes (32 bits) of cryptographically secure randomness
+    const randomBytes = CryptoUtils.generateSecureRandom(4);
+    // Convert to unsigned 32-bit integer
+    return randomBytes.readUInt32BE(0);
+  }
+
+  /**
+   * Validate and convert salt to number
+   */
+  private validateAndConvertSalt(salt: any): number {
+    if (typeof salt === 'number') {
+      if (!Number.isInteger(salt) || salt < 0 || salt > 0xFFFFFFFF) {
+        throw new ProofGenerationError('Salt must be a 32-bit unsigned integer');
+      }
+      return salt;
+    }
+
+    if (typeof salt === 'string') {
+      const parsed = parseInt(salt, 10);
+      if (isNaN(parsed) || parsed < 0 || parsed > 0xFFFFFFFF) {
+        throw new ProofGenerationError('Invalid salt string value');
+      }
+      return parsed;
+    }
+
+    throw new ProofGenerationError('Salt must be a number or numeric string');
   }
 
   /**

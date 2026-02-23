@@ -1,6 +1,6 @@
 /**
  * Digital Identity Capability Proof Service
- * Privacy-preserving attribute verification using zero-knowledge proofs
+ * Production-grade privacy-preserving attribute verification using zero-knowledge proofs
  */
 
 export { IdentityRegistry } from './IdentityRegistry';
@@ -9,6 +9,11 @@ export { ZKCircuitEngine } from './ZKCircuitEngine';
 export { ProofGenerator } from './ProofGenerator';
 export { ProofVerifier } from './ProofVerifier';
 export { RevocationRegistry } from './RevocationRegistry';
+
+// Export security modules
+export * from './security';
+export * from './errors/SystemErrors';
+export { SparseMerkleTree, MerkleProof, SparseMerkleTreeState } from './crypto/SparseMerkleTree';
 
 export {
   Identity,
@@ -28,7 +33,13 @@ import { ProofGenerator } from './ProofGenerator';
 import { ProofVerifier } from './ProofVerifier';
 import { RevocationRegistry } from './RevocationRegistry';
 import { ClaimStatement, Attribute, Credential, Proof, VerificationResult } from './types';
+import { NotFoundError, ValidationError } from './errors/SystemErrors';
+import { InputValidator } from './security/InputValidator';
 
+/**
+ * Production-grade Digital Identity Proof Service
+ * Orchestrates all components with comprehensive validation
+ */
 export class DigitalIdentityProofService {
   private identityRegistry: IdentityRegistry;
   private credentialIssuer: CredentialIssuer;
@@ -37,6 +48,11 @@ export class DigitalIdentityProofService {
   private revocationRegistry: RevocationRegistry;
 
   constructor(issuerName: string = 'Default Issuer') {
+    // Validate issuer name
+    if (!issuerName || typeof issuerName !== 'string' || issuerName.length > 100) {
+      throw new ValidationError('Invalid issuer name');
+    }
+
     this.identityRegistry = new IdentityRegistry();
     this.credentialIssuer = new CredentialIssuer(issuerName);
     this.proofGenerator = new ProofGenerator();
@@ -45,19 +61,23 @@ export class DigitalIdentityProofService {
   }
 
   /**
-   * Register a new identity
+   * Register a new identity with validation
    */
   registerIdentity(publicKey: string, attributes: Attribute[]) {
     return this.identityRegistry.registerIdentity(publicKey, attributes);
   }
 
   /**
-   * Issue a credential
+   * Issue a credential with validation
    */
   issueCredential(identityId: string, attributes: Attribute[], expiresAt?: number) {
+    // Validate identity exists
+    InputValidator.validateIdentityId(identityId);
+
     if (!this.identityRegistry.hasIdentity(identityId)) {
-      throw new Error('Identity not found');
+      throw new NotFoundError('Identity', identityId);
     }
+
     return this.credentialIssuer.issueCredential(identityId, attributes, expiresAt);
   }
 

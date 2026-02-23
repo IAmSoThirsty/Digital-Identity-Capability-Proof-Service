@@ -2,6 +2,8 @@
  * Role-Based Access Control (RBAC) system
  * Implements fine-grained permissions for production security
  */
+import { AuthorizationError as SystemAuthorizationError } from '../errors/SystemErrors';
+
 export class AccessControl {
   private rolePermissions: Map<Role, Set<Permission>>;
   private userRoles: Map<string, Set<Role>>;
@@ -134,7 +136,7 @@ export class AccessControl {
    */
   requirePermission(userId: string, permission: Permission, resourceId?: string): void {
     if (!this.hasPermission(userId, permission, resourceId)) {
-      throw new AuthorizationError(
+      throw new SystemAuthorizationError(
         `User ${userId} lacks permission: ${permission}`
       );
     }
@@ -229,15 +231,9 @@ export class AccessControl {
 }
 
 /**
- * Authorization error
+ * Authorization error (re-export from SystemErrors for convenience)
  */
-export class AuthorizationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AuthorizationError';
-    Object.setPrototypeOf(this, AuthorizationError.prototype);
-  }
-}
+export { AuthorizationError } from '../errors/SystemErrors';
 
 /**
  * Available roles
