@@ -29,12 +29,23 @@ export interface Proof {
   proof: any;
   publicSignals: string[];
   statement: string;
+  metadata?: ProofMetadata;
+}
+
+export interface ProofMetadata {
+  claimType: string;
+  generatedAt: number;
+  generationTimeMs: number;
+  version: string;
 }
 
 export interface VerificationResult {
   valid: boolean;
   statement: string;
   timestamp: number;
+  verificationTimeMs?: number;
+  cached?: boolean;
+  error?: string;
 }
 
 export interface RevocationRecord {
