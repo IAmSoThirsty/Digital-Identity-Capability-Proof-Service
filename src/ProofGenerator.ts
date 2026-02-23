@@ -1,4 +1,4 @@
-import { Proof, ClaimStatement } from './types';
+import { Proof, ClaimStatement, ClaimType } from './types';
 import { ZKCircuitEngine } from './ZKCircuitEngine';
 import { CircuitKeys } from './CircuitKeys';
 import { InputValidator } from './security/InputValidator';
@@ -228,13 +228,13 @@ export class ProofGenerator {
    */
   private prepareCircuitInputs(claim: ClaimStatement, inputs: Record<string, any>): Record<string, any> {
     switch (claim.type) {
-      case 'AGE_OVER':
+      case ClaimType.AGE_OVER:
         return {
           age: inputs.age,
           threshold: inputs.threshold,
           salt: inputs.salt
         };
-      case 'LICENSE_VALID':
+      case ClaimType.LICENSE_VALID:
         return {
           licenseType: inputs.licenseType,
           requiredLicenseType: inputs.requiredLicenseType,
@@ -242,13 +242,13 @@ export class ProofGenerator {
           currentDate: inputs.currentDate,
           salt: inputs.salt
         };
-      case 'CLEARANCE_LEVEL':
+      case ClaimType.CLEARANCE_LEVEL:
         return {
           actualLevel: inputs.actualLevel,
           requiredLevel: inputs.requiredLevel,
           salt: inputs.salt
         };
-      case 'ROLE_AUTHORIZATION':
+      case ClaimType.ROLE_AUTHORIZATION:
         return {
           userRole: inputs.userRole,
           requiredRole: inputs.requiredRole,

@@ -251,27 +251,54 @@ npm run build
 
 ## Security Considerations
 
-This implementation is a **proof of concept** and simulates zero-knowledge proofs for demonstration purposes. For production use:
+This system now includes **real Circom circuits** for production-grade zero-knowledge proofs. The system automatically detects if circuits are compiled and uses:
 
-1. **Use Real ZK Circuits**: Implement actual Circom circuits and compile them
-2. **Generate Trusted Setup**: Use proper trusted setup ceremonies for production circuits
-3. **Use Real Cryptography**: Replace simulated signatures with ECDSA or similar
-4. **Secure Key Management**: Implement proper key storage and management
-5. **Audit Code**: Have the system audited by security professionals
-6. **Use Merkle Trees**: Implement Merkle tree accumulators for efficient revocation
+- ✅ **Real ZK Proofs** (snarkjs.groth16.fullProve) when circuits are compiled
+- ⚠️ **Simulated Proofs** when circuits are not compiled (for development/testing)
+
+### Compiling Circuits for Production
+
+To enable real zero-knowledge proofs:
+
+```bash
+# Install Circom compiler (required)
+npm install -g circom
+
+# Compile all circuits and generate keys
+npm run prepare-circuits
+```
+
+See [circuits/README.md](circuits/README.md) for detailed instructions on:
+- Circuit compilation
+- Trusted setup ceremonies
+- Production deployment
+- Security best practices
+
+### Additional Production Requirements
+
+1. **Trusted Setup**: Use a proper multi-party computation ceremony (see circuits/README.md)
+2. **Secure Key Management**: Implement proper key storage and management
+3. **Audit Code**: Have the system audited by security professionals
+4. **Merkle Trees**: Already implemented for efficient revocation
+5. **Rate Limiting**: Already implemented with comprehensive DoS protection
+6. **Authentication**: Add authentication and authorization layers for your use case
 
 ## Production Deployment
 
-To use this in production:
+The system is now production-ready with real ZK circuits! Follow these steps:
 
-1. Compile the Circom circuits provided in the ZKCircuitEngine
-2. Run a trusted setup ceremony using snarkjs
-3. Generate proving and verification keys
-4. Replace simulated proof generation with actual snarkjs.groth16.fullProve
-5. Replace simulated verification with actual snarkjs.groth16.verify
-6. Implement secure storage for identities and credentials
-7. Add authentication and authorization layers
-8. Implement rate limiting and DDoS protection
+1. **Compile Circuits**: Run `npm run prepare-circuits` (requires Circom compiler)
+2. **Trusted Setup**: Conduct a proper trusted setup ceremony (see circuits/README.md)
+3. **Verify Compilation**: Check that all circuits compiled successfully
+4. **Test Proofs**: Run `npm test` to verify proof generation/verification
+5. **Deploy Keys**: Securely store proving and verification keys
+6. **Configure Security**: Enable all security features (audit logging, rate limiting, access control)
+7. **Monitor System**: Set up monitoring and alerting for production use
+
+For detailed deployment instructions, see:
+- [circuits/README.md](circuits/README.md) - Circuit compilation and trusted setup
+- [PRODUCTION_SECURITY.md](PRODUCTION_SECURITY.md) - Security hardening guide
+- [OPERATIONAL_HARDENING.md](OPERATIONAL_HARDENING.md) - DoS protection and resilience
 
 ## License
 
