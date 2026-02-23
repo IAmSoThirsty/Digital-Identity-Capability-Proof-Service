@@ -318,7 +318,7 @@ export class ZKCircuitEngine {
       case ClaimType.ROLE_AUTHORIZATION:
         return this.getRoleAuthorizationCircuit();
       default:
-        throw new Error(`Unsupported claim type: ${claimType}`);
+        throw new ConfigurationError(`Unsupported claim type: ${claimType}`);
     }
   }
 

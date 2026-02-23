@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual, randomBytes } from 'crypto';
+import { ValidationError, CryptographicError } from '../errors/SystemErrors';
 
 /**
  * Cryptographic utilities for production-grade security
@@ -72,7 +73,11 @@ export class CryptoUtils {
    */
   static generateSecureRandom(bytes: number): Buffer {
     if (bytes <= 0 || bytes > 1024) {
-      throw new Error('Invalid random bytes size (must be 1-1024)');
+      throw new ValidationError('Invalid random bytes size (must be 1-1024)', {
+        requested: bytes,
+        min: 1,
+        max: 1024
+      });
     }
 
     const random = randomBytes(bytes);
@@ -110,7 +115,11 @@ export class CryptoUtils {
     const requiredEntropy = data.length * 7.5;
 
     if (totalEntropy < requiredEntropy) {
-      throw new Error('Insufficient entropy in random data');
+      throw new CryptographicError('Insufficient entropy in random data', {
+        totalEntropy: totalEntropy.toFixed(2),
+        requiredEntropy: requiredEntropy.toFixed(2),
+        bitsPerByte: entropy.toFixed(2)
+      });
     }
   }
 
@@ -141,11 +150,18 @@ export class CryptoUtils {
     length: number = 32
   ): Buffer {
     if (masterKey.length < 32) {
-      throw new Error('Master key must be at least 32 bytes');
+      throw new ValidationError('Master key must be at least 32 bytes', {
+        provided: masterKey.length,
+        required: 32
+      });
     }
 
     if (length <= 0 || length > 255 * 32) {
-      throw new Error('Invalid derived key length');
+      throw new ValidationError('Invalid derived key length', {
+        requested: length,
+        min: 1,
+        max: 255 * 32
+      });
     }
 
     // HKDF-Extract
@@ -300,7 +316,11 @@ export class CryptoUtils {
     iterations: number;
   } {
     if (difficulty < 1 || difficulty > 32) {
-      throw new Error('Difficulty must be between 1 and 32');
+      throw new ValidationError('Difficulty must be between 1 and 32', {
+        requested: difficulty,
+        min: 1,
+        max: 32
+      });
     }
 
     const prefix = '0'.repeat(difficulty);
@@ -323,7 +343,10 @@ export class CryptoUtils {
 
       // Prevent infinite loop
       if (nonce > 10000000) {
-        throw new Error('Proof of work taking too long');
+        throw new CryptographicError('Proof of work taking too long', {
+          difficulty,
+          iterations: nonce
+        });
       }
     }
   }

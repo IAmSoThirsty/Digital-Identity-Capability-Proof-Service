@@ -81,7 +81,7 @@ export class AccessControl {
    */
   assignRole(userId: string, role: Role): void {
     if (!this.rolePermissions.has(role)) {
-      throw new Error(`Invalid role: ${role}`);
+      throw new SystemAuthorizationError(`Invalid role: ${role}`);
     }
 
     if (!this.userRoles.has(userId)) {

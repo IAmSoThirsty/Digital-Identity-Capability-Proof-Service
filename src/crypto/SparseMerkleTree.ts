@@ -1,4 +1,5 @@
 import { CryptoUtils } from '../security/CryptoUtils';
+import { ValidationError, CryptographicError } from '../errors/SystemErrors';
 
 /**
  * Sparse Merkle Tree for efficient revocation registry
@@ -21,7 +22,10 @@ export class SparseMerkleTree {
    */
   insert(index: bigint, value: string): void {
     if (index < 0n || index >= 2n ** BigInt(this.TREE_DEPTH)) {
-      throw new Error('Index out of range');
+      throw new ValidationError('Index out of range', {
+        index: index.toString(),
+        maxIndex: (2n ** BigInt(this.TREE_DEPTH) - 1n).toString()
+      });
     }
 
     // Store leaf
@@ -198,7 +202,10 @@ export class SparseMerkleTree {
    */
   import(state: SparseMerkleTreeState): void {
     if (state.depth !== this.TREE_DEPTH) {
-      throw new Error('Tree depth mismatch');
+      throw new ValidationError('Tree depth mismatch', {
+        expected: this.TREE_DEPTH,
+        actual: state.depth
+      });
     }
 
     this.nodes.clear();
@@ -211,7 +218,10 @@ export class SparseMerkleTree {
 
     // Verify root matches
     if (!CryptoUtils.constantTimeEqual(this.root, state.root)) {
-      throw new Error('Root hash mismatch after import');
+      throw new CryptographicError('Root hash mismatch after import', {
+        expected: state.root,
+        actual: this.root
+      });
     }
   }
 }
