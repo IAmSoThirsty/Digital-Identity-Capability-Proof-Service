@@ -2,6 +2,13 @@
 
 Privacy-preserving attribute verification using zero-knowledge proofs.
 
+## Documentation
+
+- **[Architecture Summary](ARCHITECTURE_SUMMARY.md)** - Quick reference to system architecture
+- **[Complete Architecture](ARCHITECTURE.md)** - Full RFC-grade architectural specification
+- **[Protocol Specifications](PROTOCOLS.md)** - Detailed protocol and message format specs
+- **[Interface Contracts](src/contracts/interfaces.ts)** - TypeScript interface definitions
+
 ## Overview
 
 DICPS enables privacy-preserving identity verification where users can prove specific attributes about themselves without revealing the underlying data. For example, prove you're over 18 without revealing your exact age, or prove you're a licensed engineer without revealing your license number.
