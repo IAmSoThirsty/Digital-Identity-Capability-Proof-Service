@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.log
+.env
+coverage/
+.DS_Store
+*.swp
+*.swo
+circuits/build/
+circuits/*.r1cs
+circuits/*.wasm
+circuits/*.zkey
+circuits/*.vkey
+circuits/*.sym
