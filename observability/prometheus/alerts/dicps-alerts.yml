@@ -1,0 +1,351 @@
+groups:
+  - name: dicps_slo_alerts
+    interval: 30s
+    rules:
+      # ====================================================================
+      # SLO: 99.95% API Availability
+      # Error Budget: 0.05% (21.6 minutes/month)
+      # ====================================================================
+
+      - alert: SLOAvailabilityBudgetBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{job="dicps-api",code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="dicps-api"}[5m]))
+          ) > 0.0005
+        for: 5m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "SLO Availability budget burning too fast"
+          description: "Error rate {{ $value | humanizePercentage }} exceeds SLO budget of 0.05%"
+          runbook: "https://runbooks.dicps.example.com/slo-availability"
+
+      - alert: SLOAvailabilityBudgetExhausted
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{job="dicps-api",code!~"5.."}[30d]))
+              /
+              sum(rate(http_requests_total{job="dicps-api"}[30d]))
+            )
+          ) > 0.0005
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "SLO Availability budget exhausted"
+          description: "30-day error rate {{ $value | humanizePercentage }} exceeds monthly budget"
+
+      # ====================================================================
+      # SLO: 95th Percentile Latency < 200ms
+      # ====================================================================
+
+      - alert: SLOLatencyP95Exceeded
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="dicps-api"}[5m])) by (le)
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "P95 latency exceeds SLO target"
+          description: "P95 latency {{ $value }}s exceeds 200ms target"
+          runbook: "https://runbooks.dicps.example.com/slo-latency"
+
+      - alert: SLOLatencyP99Exceeded
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="dicps-api"}[5m])) by (le)
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "P99 latency exceeds SLO target"
+          description: "P99 latency {{ $value }}s exceeds 500ms target"
+
+      # ====================================================================
+      # SLO: Proof Generation Success Rate 99.9%
+      # ====================================================================
+
+      - alert: SLOProofGenerationFailureRate
+        expr: |
+          (
+            sum(rate(proof_generation_total{status="failed"}[10m]))
+            /
+            sum(rate(proof_generation_total[10m]))
+          ) > 0.001
+        for: 5m
+        labels:
+          severity: critical
+          slo: proof_generation
+        annotations:
+          summary: "Proof generation failure rate exceeds SLO"
+          description: "Failure rate {{ $value | humanizePercentage }} exceeds 0.1% target"
+          runbook: "https://runbooks.dicps.example.com/proof-failures"
+
+  - name: dicps_critical_alerts
+    interval: 30s
+    rules:
+      # ====================================================================
+      # Infrastructure Alerts
+      # ====================================================================
+
+      - alert: APIDown
+        expr: up{job="dicps-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "DICPS API is down"
+          description: "API instance {{ $labels.instance }} is unreachable"
+          runbook: "https://runbooks.dicps.example.com/api-down"
+
+      - alert: HighPodCPU
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{pod=~"dicps-api.*"}[5m])) by (pod) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High CPU usage on pod {{ $labels.pod }}"
+          description: "CPU usage {{ $value | humanizePercentage }}"
+
+      - alert: HighPodMemory
+        expr: |
+          sum(container_memory_working_set_bytes{pod=~"dicps-api.*"}) by (pod)
+          /
+          sum(container_spec_memory_limit_bytes{pod=~"dicps-api.*"}) by (pod)
+          > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High memory usage on pod {{ $labels.pod }}"
+          description: "Memory usage {{ $value | humanizePercentage }}"
+
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total{pod=~"dicps-api.*"}[15m]) > 0
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Restart rate: {{ $value }}"
+          runbook: "https://runbooks.dicps.example.com/pod-crashes"
+
+      # ====================================================================
+      # Database Alerts
+      # ====================================================================
+
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "Database is unreachable"
+          runbook: "https://runbooks.dicps.example.com/database-down"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          sum(pg_stat_database_numbackends) / sum(pg_settings_max_connections) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of connections in use"
+
+      - alert: DatabaseReplicationLag
+        expr: pg_replication_lag_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database replication lag detected"
+          description: "Replication lag: {{ $value }}s"
+
+      - alert: DatabaseHighTransactionTime
+        expr: rate(pg_stat_database_xact_commit[5m]) / rate(pg_stat_database_xact_rollback[5m]) < 0.95
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High transaction rollback rate"
+          description: "Commit ratio: {{ $value | humanizePercentage }}"
+
+      # ====================================================================
+      # Security Alerts
+      # ====================================================================
+
+      - alert: HighAuthenticationFailureRate
+        expr: |
+          sum(rate(auth_attempts_total{status="failed"}[5m]))
+          /
+          sum(rate(auth_attempts_total[5m]))
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Failure rate: {{ $value | humanizePercentage }}"
+          runbook: "https://runbooks.dicps.example.com/auth-failures"
+
+      - alert: RateLimitExceeded
+        expr: sum(rate(rate_limit_exceeded_total[5m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Rate limit frequently exceeded"
+          description: "{{ $value }} rate limit violations/sec"
+          runbook: "https://runbooks.dicps.example.com/rate-limits"
+
+      - alert: SuspiciousProofVerificationPattern
+        expr: |
+          sum(rate(proof_verification_total{result="failed"}[10m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Unusual proof verification failure pattern"
+          description: "{{ $value }} failed verifications/sec"
+          runbook: "https://runbooks.dicps.example.com/suspicious-activity"
+
+      # ====================================================================
+      # Business Logic Alerts
+      # ====================================================================
+
+      - alert: CredentialRevocationSpike
+        expr: |
+          sum(rate(credentials_revoked_total[10m])) >
+          4 * sum(rate(credentials_revoked_total[1h] offset 1h))
+        for: 5m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Unusual credential revocation spike"
+          description: "Revocation rate 4x normal: {{ $value }}/sec"
+
+      - alert: ZKCircuitNotCompiled
+        expr: zk_circuit_status{status="simulated"} == 1
+        for: 10m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "ZK circuits not compiled - using simulation mode"
+          description: "Production system must use compiled circuits"
+          runbook: "https://runbooks.dicps.example.com/circuit-compilation"
+
+      - alert: ProofGenerationTimeout
+        expr: |
+          sum(rate(proof_generation_timeouts_total[10m])) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Proof generation timeouts detected"
+          description: "{{ $value }} timeouts/sec (30s limit)"
+
+      # ====================================================================
+      # Capacity Alerts
+      # ====================================================================
+
+      - alert: HighRequestRate
+        expr: sum(rate(http_requests_total{job="dicps-api"}[5m])) > 5000
+        for: 10m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "Request rate approaching capacity"
+          description: "{{ $value }} requests/sec"
+
+      - alert: AutoscalingMaxReached
+        expr: |
+          kube_deployment_status_replicas{deployment="dicps-api"}
+          >=
+          kube_deployment_spec_replicas{deployment="dicps-api"}
+        for: 15m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "HPA at maximum replicas"
+          description: "Scale limit reached - consider increasing maxReplicas"
+
+      - alert: DiskSpaceRunningOut
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/var/lib/docker"}
+            /
+            node_filesystem_size_bytes{mountpoint="/var/lib/docker"}
+          ) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Disk space critically low on {{ $labels.instance }}"
+          description: "Only {{ $value | humanizePercentage }} available"
+
+      # ====================================================================
+      # Compliance Alerts
+      # ====================================================================
+
+      - alert: AuditLogFailure
+        expr: sum(rate(audit_log_write_errors_total[5m])) > 0
+        labels:
+          severity: critical
+          component: compliance
+        annotations:
+          summary: "Audit logging failures detected"
+          description: "{{ $value }} audit log write errors/sec"
+          runbook: "https://runbooks.dicps.example.com/audit-failures"
+
+      - alert: CertificateExpiringSoon
+        expr: |
+          (cert_expiry_timestamp_seconds - time()) / 86400 < 30
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "TLS certificate expiring soon"
+          description: "Certificate {{ $labels.cn }} expires in {{ $value }} days"
+
+      - alert: BackupFailure
+        expr: time() - backup_last_success_timestamp_seconds > 86400
+        labels:
+          severity: critical
+          component: data
+        annotations:
+          summary: "Database backup not completed in 24h"
+          description: "Last successful backup: {{ $value | humanizeDuration }} ago"
+          runbook: "https://runbooks.dicps.example.com/backup-failure"
+
+# ====================================================================
+# Notification Routing (Alertmanager config)
+# ====================================================================
+# See alertmanager.yml for routing configuration
