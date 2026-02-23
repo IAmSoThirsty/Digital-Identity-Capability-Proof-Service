@@ -32,6 +32,7 @@
   "dependencies": {
     "snarkjs": "^0.7.3",
     "circomlibjs": "^0.1.7",
+    "circomlib": "^2.0.5",
     "ethers": "^6.9.2"
   }
 }

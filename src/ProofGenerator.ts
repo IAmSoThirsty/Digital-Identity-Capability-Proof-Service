@@ -1,8 +1,9 @@
 import { Proof, ClaimStatement } from './types';
 import { ZKCircuitEngine } from './ZKCircuitEngine';
+import { CircuitKeys } from './CircuitKeys';
 import { InputValidator } from './security/InputValidator';
 import { CryptoUtils } from './security/CryptoUtils';
-import { ProofGenerationError, TimeoutError } from './errors/SystemErrors';
+import { ProofGenerationError, TimeoutError, ConfigurationError } from './errors/SystemErrors';
 
 const snarkjs = require('snarkjs');
 
@@ -12,11 +13,24 @@ const snarkjs = require('snarkjs');
  */
 export class ProofGenerator {
   private circuitEngine: ZKCircuitEngine;
+  private circuitKeys: CircuitKeys;
   private readonly PROOF_TIMEOUT_MS = 30000; // 30 seconds
   private readonly MAX_PROOF_SIZE = 10000; // 10KB max proof size
+  private useRealProofs: boolean = true; // Use real ZK proofs by default
 
-  constructor() {
+  constructor(useRealProofs: boolean = true) {
     this.circuitEngine = new ZKCircuitEngine();
+    this.circuitKeys = CircuitKeys.getInstance();
+    this.useRealProofs = useRealProofs;
+
+    // If real proofs are enabled, validate circuits are compiled
+    if (this.useRealProofs && !this.circuitKeys.areCircuitsReady()) {
+      console.warn(
+        'Warning: Circuits are not compiled. Falling back to simulated proofs. ' +
+        'Run \'npm run prepare-circuits\' to enable real ZK proofs.'
+      );
+      this.useRealProofs = false;
+    }
   }
 
   /**
@@ -148,7 +162,9 @@ export class ProofGenerator {
     claim: ClaimStatement,
     inputs: Record<string, any>
   ): Promise<{ proof: any; publicSignals: string[] }> {
-    const proofPromise = this.simulateProofGeneration(claim, inputs);
+    const proofPromise = this.useRealProofs
+      ? this.generateRealProof(claim, inputs)
+      : this.simulateProofGeneration(claim, inputs);
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(
@@ -170,6 +186,76 @@ export class ProofGenerator {
       throw new ProofGenerationError(
         `Proof size exceeds limit: ${proofSize} > ${this.MAX_PROOF_SIZE}`
       );
+    }
+  }
+
+  /**
+   * Generate real ZK proof using snarkjs.groth16.fullProve
+   */
+  private async generateRealProof(
+    claim: ClaimStatement,
+    inputs: Record<string, any>
+  ): Promise<{ proof: any; publicSignals: string[] }> {
+    try {
+      // Get circuit files
+      const wasmFile = this.circuitKeys.getWasmPath(claim.type);
+      const zkeyFile = this.circuitKeys.getZkeyPath(claim.type);
+
+      // Prepare circuit inputs (remove metadata fields used only for simulation)
+      const circuitInputs = this.prepareCircuitInputs(claim, inputs);
+
+      // Generate proof using snarkjs
+      const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+        circuitInputs,
+        wasmFile,
+        zkeyFile
+      );
+
+      return { proof, publicSignals };
+    } catch (error) {
+      throw new ProofGenerationError(
+        'Real proof generation failed',
+        {
+          claimType: claim.type,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+    }
+  }
+
+  /**
+   * Prepare circuit inputs by extracting only the signals needed by the circuit
+   */
+  private prepareCircuitInputs(claim: ClaimStatement, inputs: Record<string, any>): Record<string, any> {
+    switch (claim.type) {
+      case 'AGE_OVER':
+        return {
+          age: inputs.age,
+          threshold: inputs.threshold,
+          salt: inputs.salt
+        };
+      case 'LICENSE_VALID':
+        return {
+          licenseType: inputs.licenseType,
+          requiredLicenseType: inputs.requiredLicenseType,
+          expirationDate: inputs.expirationDate,
+          currentDate: inputs.currentDate,
+          salt: inputs.salt
+        };
+      case 'CLEARANCE_LEVEL':
+        return {
+          actualLevel: inputs.actualLevel,
+          requiredLevel: inputs.requiredLevel,
+          salt: inputs.salt
+        };
+      case 'ROLE_AUTHORIZATION':
+        return {
+          userRole: inputs.userRole,
+          requiredRole: inputs.requiredRole,
+          salt: inputs.salt
+        };
+      default:
+        throw new ProofGenerationError(`Unsupported claim type: ${claim.type}`);
     }
   }
 
@@ -263,5 +349,19 @@ export class ProofGenerator {
    */
   getCircuitEngine(): ZKCircuitEngine {
     return this.circuitEngine;
+  }
+
+  /**
+   * Check if using real ZK proofs or simulated proofs
+   */
+  isUsingRealProofs(): boolean {
+    return this.useRealProofs;
+  }
+
+  /**
+   * Get circuit compilation status
+   */
+  getCircuitStatus(): Record<string, any> {
+    return this.circuitKeys.getCircuitStatus();
   }
 }

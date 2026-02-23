@@ -1,4 +1,5 @@
-import { Proof, VerificationResult } from './types';
+import { Proof, VerificationResult, ClaimType } from './types';
+import { CircuitKeys } from './CircuitKeys';
 import { ProofVerificationError, TimeoutError } from './errors/SystemErrors';
 import { CryptoUtils } from './security/CryptoUtils';
 
@@ -9,9 +10,25 @@ const snarkjs = require('snarkjs');
  * Verifies zero-knowledge proofs with comprehensive security checks
  */
 export class ProofVerifier {
+  private circuitKeys: CircuitKeys;
   private readonly VERIFICATION_TIMEOUT_MS = 10000; // 10 seconds
   private readonly MAX_BATCH_SIZE = 100;
   private verificationCache: Map<string, boolean> = new Map();
+  private useRealVerification: boolean = true;
+
+  constructor(useRealVerification: boolean = true) {
+    this.circuitKeys = CircuitKeys.getInstance();
+    this.useRealVerification = useRealVerification;
+
+    // If real verification is enabled, check if circuits are ready
+    if (this.useRealVerification && !this.circuitKeys.areCircuitsReady()) {
+      console.warn(
+        'Warning: Circuits are not compiled. Falling back to simulated verification. ' +
+        'Run \'npm run prepare-circuits\' to enable real ZK verification.'
+      );
+      this.useRealVerification = false;
+    }
+  }
 
   /**
    * Verify a zero-knowledge proof with validation and caching
@@ -125,7 +142,9 @@ export class ProofVerifier {
    * Verify proof with timeout protection
    */
   private async verifyWithTimeout(proof: Proof): Promise<boolean> {
-    const verificationPromise = this.simulateVerification(proof);
+    const verificationPromise = this.useRealVerification
+      ? this.performRealVerification(proof)
+      : this.simulateVerification(proof);
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(
@@ -178,6 +197,39 @@ export class ProofVerifier {
 
     // The proof is valid if the result is '1' (true)
     return resultSignal === '1';
+  }
+
+  /**
+   * Perform real ZK proof verification using snarkjs.groth16.verify
+   */
+  private async performRealVerification(proof: Proof): Promise<boolean> {
+    try {
+      // Extract claim type from metadata
+      if (!proof.metadata || !proof.metadata.claimType) {
+        throw new ProofVerificationError('Proof metadata missing claim type');
+      }
+
+      const claimType = proof.metadata.claimType as ClaimType;
+
+      // Load verification key for this circuit
+      const verificationKey = this.circuitKeys.getVerificationKey(claimType);
+
+      // Verify the proof using snarkjs
+      const valid = await snarkjs.groth16.verify(
+        verificationKey,
+        proof.publicSignals,
+        proof.proof
+      );
+
+      return valid;
+    } catch (error) {
+      throw new ProofVerificationError(
+        'Real proof verification failed',
+        {
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+    }
   }
 
   /**
@@ -293,17 +345,9 @@ export class ProofVerifier {
   }
 
   /**
-   * Load verification key for a circuit (simulation)
-   * In production, this would load actual verification keys
+   * Check if using real ZK verification or simulated verification
    */
-  private async loadVerificationKey(claimType: string): Promise<any> {
-    // In production:
-    // return JSON.parse(fs.readFileSync(`circuits/${claimType}_vkey.json`, 'utf8'));
-
-    return {
-      protocol: 'groth16',
-      curve: 'bn128'
-      // ... verification key parameters
-    };
+  isUsingRealVerification(): boolean {
+    return this.useRealVerification;
   }
 }
