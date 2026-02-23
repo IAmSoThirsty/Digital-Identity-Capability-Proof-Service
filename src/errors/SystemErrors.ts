@@ -292,11 +292,8 @@ export class ErrorHandler {
         throw error;
       }
 
-      throw new SystemError(
+      throw new CryptographicError(
         errorMessage,
-        'INTERNAL_ERROR',
-        500,
-        false,
         { originalError: error instanceof Error ? error.message : String(error) }
       );
     }

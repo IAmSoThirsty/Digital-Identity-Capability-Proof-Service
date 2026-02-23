@@ -141,7 +141,7 @@ export class ProofVerifier {
    * Simulate proof verification with enhanced security
    * In production, use snarkjs.groth16.verify
    */
-  private async simulateVerification(proof: Proof): boolean {
+  private async simulateVerification(proof: Proof): Promise<boolean> {
     // In production:
     // const vKey = await this.loadVerificationKey(claimType);
     // const valid = await snarkjs.groth16.verify(vKey, proof.publicSignals, proof.proof);

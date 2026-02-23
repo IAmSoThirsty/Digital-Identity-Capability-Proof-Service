@@ -1,4 +1,4 @@
-import { CryptoUtils } from './security/CryptoUtils';
+import { CryptoUtils } from '../security/CryptoUtils';
 
 /**
  * Sparse Merkle Tree for efficient revocation registry
