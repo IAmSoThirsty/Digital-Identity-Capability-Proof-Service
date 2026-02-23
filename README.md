@@ -4,10 +4,19 @@ Privacy-preserving attribute verification using zero-knowledge proofs.
 
 ## Documentation
 
+### Architecture
 - **[Architecture Summary](ARCHITECTURE_SUMMARY.md)** - Quick reference to system architecture
 - **[Complete Architecture](ARCHITECTURE.md)** - Full RFC-grade architectural specification
 - **[Protocol Specifications](PROTOCOLS.md)** - Detailed protocol and message format specs
 - **[Interface Contracts](src/contracts/interfaces.ts)** - TypeScript interface definitions
+
+### Security
+- **[Security Proofs](SECURITY_PROOFS.md)** - Formal security proofs and protocol-level reasoning
+- **[Adversarial Model](ADVERSARIAL_MODEL.md)** - Comprehensive threat modeling and attack analysis
+- **[Cryptographic Agility](CRYPTO_AGILITY.md)** - Algorithm rotation and migration governance
+- **[Audit Chain](AUDIT_CHAIN.md)** - Deterministic state transition hashing and tamper evidence
+- **[Operational Hardening](OPERATIONAL_HARDENING.md)** - DoS resilience and distributed system hardening
+- **[Governance Framework](GOVERNANCE.md)** - Multi-issuer coordination and economic incentives
 
 ## Overview
 
