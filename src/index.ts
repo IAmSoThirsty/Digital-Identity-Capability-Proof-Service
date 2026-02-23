@@ -6,6 +6,7 @@
 export { IdentityRegistry } from './IdentityRegistry';
 export { CredentialIssuer } from './CredentialIssuer';
 export { ZKCircuitEngine } from './ZKCircuitEngine';
+export { CircuitKeys } from './CircuitKeys';
 export { ProofGenerator } from './ProofGenerator';
 export { ProofVerifier } from './ProofVerifier';
 export { RevocationRegistry } from './RevocationRegistry';
